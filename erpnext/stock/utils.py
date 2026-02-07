@@ -78,8 +78,21 @@ def get_stock_value_on(
 			warehouses = [warehouses]
 
 		warehouses = set(warehouses)
-		for wh in list(warehouses):
-			if frappe.db.get_value("Warehouse", wh, "is_group"):
+
+		# Optimization: Bulk fetch is_group status to avoid N+1 queries
+		warehouse_list = list(warehouses)
+		is_group_map = {}
+		if warehouse_list:
+			records = frappe.db.get_all(
+				"Warehouse",
+				filters={"name": ["in", warehouse_list]},
+				fields=["name", "is_group"],
+			)
+			for d in records:
+				is_group_map[d["name"]] = d["is_group"]
+
+		for wh in warehouse_list:
+			if is_group_map.get(wh):
 				warehouses.update(get_child_warehouses(wh))
 
 		query = query.where(sle.warehouse.isin(warehouses))
